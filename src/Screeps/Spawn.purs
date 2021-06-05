@@ -16,6 +16,8 @@ import Prelude
 import Data.Generic.Rep (class Generic)
 import Data.Show.Generic (genericShow)
 
+import Screeps.Internal.Constants
+
 import Effect (Effect)
 
 data Spawn
@@ -30,14 +32,14 @@ data BodyType = BodyWork
               | BodyClaim
 
 encodeBodyType :: BodyType -> String
-encodeBodyType BodyWork = "work"
-encodeBodyType BodyMove = "move"
-encodeBodyType BodyCarry = "carry"
-encodeBodyType BodyAttack = "attack"
-encodeBodyType BodyRangedAttack = "ranged_attack"
-encodeBodyType BodyTough = "tough"
-encodeBodyType BodyHeal = "heal"
-encodeBodyType BodyClaim = "claim"
+encodeBodyType BodyWork = kWORK
+encodeBodyType BodyMove = kMOVE
+encodeBodyType BodyCarry = kCARRY
+encodeBodyType BodyAttack = kATTACK
+encodeBodyType BodyRangedAttack = kRANGED_ATTACK
+encodeBodyType BodyTough = kTOUGH
+encodeBodyType BodyHeal = kHEAL
+encodeBodyType BodyClaim = kCLAIM
 
 data ErrCode = ErrNotOwner
              | ErrNoPath
@@ -61,21 +63,24 @@ instance showErrCode :: Show ErrCode where
   show = genericShow
 
 parseErrCode :: Int -> Maybe ErrCode
-parseErrCode (-1) = Just ErrNotOwner
-parseErrCode (-2) = Just ErrNoPath
-parseErrCode (-3) = Just ErrNameExists
-parseErrCode (-4) = Just ErrBusy
-parseErrCode (-5) = Just ErrNotFound
-parseErrCode (-6) = Just ErrNotEnoughResourcesOrExtensions
-parseErrCode (-7) = Just ErrInvalidTarget
-parseErrCode (-8) = Just ErrFull
-parseErrCode (-9) = Just ErrNotInRange
-parseErrCode (-10) = Just ErrInvalidArgs
-parseErrCode (-11) = Just ErrTired
-parseErrCode (-12) = Just ErrNoBodypart
-parseErrCode (-14) = Just ErrRclNotEnough
-parseErrCode (-15) = Just ErrGclNotEnough
-parseErrCode _ = Nothing
+parseErrCode i
+  | i == kERR_NOT_OWNER = Just ErrNotOwner
+  | i == kERR_NO_PATH = Just ErrNoPath
+  | i == kERR_NAME_EXISTS = Just ErrNameExists
+  | i == kERR_BUSY = Just ErrBusy
+  | i == kERR_NOT_FOUND = Just ErrNotFound
+  | i == kERR_NOT_ENOUGH_ENERGY = Just ErrNotEnoughEnergy
+  | i == kERR_NOT_ENOUGH_RESOURCES = Just ErrNotEnoughResourcesOrExtensions
+  | i == kERR_INVALID_TARGET = Just ErrInvalidTarget
+  | i == kERR_FULL = Just ErrFull
+  | i == kERR_NOT_IN_RANGE = Just ErrNotInRange
+  | i == kERR_INVALID_ARGS = Just ErrInvalidArgs
+  | i == kERR_TIRED = Just ErrTired
+  | i == kERR_NO_BODYPART = Just ErrNoBodypart
+  | i == kERR_NOT_ENOUGH_RESOURCES = Just ErrNotEnoughResourcesOrExtensions
+  | i == kERR_RCL_NOT_ENOUGH = Just ErrRclNotEnough
+  | i == kERR_GCL_NOT_ENOUGH = Just ErrGclNotEnough
+  | otherwise = Nothing
 
 type RoomPosition = { roomName :: String, x :: Number, y :: Number }
 
