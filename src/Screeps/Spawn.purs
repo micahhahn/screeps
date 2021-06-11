@@ -6,19 +6,32 @@ module Screeps.Spawn
     , gameNotify
     , getRawMemory
     , setRawMemory
+    , gameSpawns
     ) where
   
+import Control.Monad.Except
+import Data.Argonaut
 import Data.Either
 import Data.Function.Uncurried
+import Data.List.NonEmpty
 import Data.Maybe
+import Data.Traversable
+import Data.Tuple
 import Effect.Exception
+import Foreign
 import Prelude
-import Data.Generic.Rep (class Generic)
-import Data.Show.Generic (genericShow)
-
 import Screeps.Internal.Constants
 
+import Control.Monad.ST.Internal (read)
+import Data.Generic.Rep (class Generic)
+import Data.Lazy (Lazy)
+import Data.Map (Map)
+import Data.Map as Map
+import Data.Show.Generic (genericShow)
 import Effect (Effect)
+import Foreign.Index as FI
+import Foreign.Keys as FK
+import Foreign.Object (Object)
 
 data Spawn
 
@@ -82,8 +95,6 @@ parseErrCode i
   | i == kERR_GCL_NOT_ENOUGH = Just ErrGclNotEnough
   | otherwise = Nothing
 
-type RoomPosition = { roomName :: String, x :: Number, y :: Number }
-
 type GameCpu = { limit :: Number, tickLimit :: Number, bucket :: Number, unlocked :: Boolean, unlockedTime :: Number }
 
 type Game = { cpu :: GameCpu }
@@ -110,11 +121,83 @@ foreign import gameNotify_ :: Fn2 String Number (Effect Unit)
 gameNotify :: String -> Number -> Effect Unit
 gameNotify = runFn2 gameNotify_
 
-foreign import getRawMemory_ :: Effect String
+foreign import getRawMemory_ :: Foreign
 foreign import setRawMemory_ :: Fn1 String (Effect Unit)
 
+foreign import gameSpawns_ :: Foreign
+
+type ObjectEffect = { effect :: Number, level :: Number, ticksRemaining :: Number }
+
+type RoomObject r = { effects :: Array ObjectEffect, pos :: RoomPosition | r}
+
+type Structure2 = RoomObject ( hits :: Number, hitsMax :: Number, id :: String )
+
+testX :: Structure2 -> Boolean
+testX s = s.pos.x > 0.0
+
+type Structure = { pos :: RoomPosition, hits :: Number, hitsMax :: Number, id :: String }
+
+readStructureSpawn :: Foreign -> FT Effect Structure
+readStructureSpawn v = do
+  pos <- v FI.! "pos" >>= readRoomPosition
+  hits <- v FI.! "hits" >>= readNumber
+  hitsMax <- v FI.! "hitsMax" >>= readNumber
+  id <- v FI.! "id" >>= readString
+  pure { pos: pos, hits: hits, hitsMax: hitsMax, id: id }
+
+readMap :: Foreign -> FT Effect (Map String Foreign)
+readMap f = do
+  ks <- FK.keys f
+  vs' <- traverse (\i -> (Tuple i <$> FI.index f i)) ks
+  pure (Map.fromFoldable vs')
+
+gameSpawns :: Effect (Map String Structure)
+gameSpawns = throwForeign $ traverse readStructureSpawn =<< readMap gameSpawns_
+
+type RoomPosition = { roomName :: String, x :: Number, y :: Number }
+
+readRoomPosition :: Foreign -> FT Effect RoomPosition
+readRoomPosition v = do
+  roomName <- v FI.! "roomName" >>= readString
+  x <- v FI.! "x" >>= readNumber
+  y <- v FI.! "y" >>= readNumber
+  pure { roomName: roomName, x: x, y: y}
+
+-- type Room = { controller :: Controller }
+-- 
+-- readRoom :: Foreign -> F Room
+-- readRoom v = do
+--   controller <- v ! "controller" >>= readStructureController
+--   energyAvailable <- v ! "energyAvailable" >>= readInt
+--   energyCapacityAvailable <- v ! "energyCapacityAvailable" >>= readInt
+--   memory <- v ! "memory" >>= readMemory
+--   name <- v ! "name" >>= readString
+--   storage <- v ! "storage" >>= readStructureStorage
+--   terminal <- v ! "terminal" >>= readStructureTerminal
+--   visual <- v ! "visual" >>= readRoomVisual
+--   pure { controller}
+
+
+throwForeign :: forall a. ExceptT (NonEmptyList ForeignError) Effect a -> Effect a
+throwForeign m = do
+  ex <- runExceptT m
+  case ex of
+    Right v -> pure v
+    Left e -> throw (foldl (<>) "" (map renderForeignError e))
+
 getRawMemory :: Effect String
-getRawMemory = getRawMemory_
+getRawMemory = throwForeign $ readString getRawMemory_
 
 setRawMemory :: String -> Effect Unit
 setRawMemory = runFn1 setRawMemory_
+
+foreign import data RoomPosition_ :: Type
+foreign import data CostMatrix :: Type
+
+type Goal = { pos :: RoomPosition_, range :: Number }
+
+foreign import mkRoomPosition_ :: Fn3 Number Number String RoomPosition_
+
+type PathFinderOpts = { roomCallback :: Fn1 String CostMatrix, plainCost :: Number, swampCost :: Number, flee :: Boolean, maxOps :: Number, maxRooms :: Number, maxCost :: Number, heuristicWeight :: Number }
+
+foreign import pathFinderSearch_ :: Fn3 RoomPosition_ (Array Goal) PathFinderOpts Json

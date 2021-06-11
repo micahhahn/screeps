@@ -36,6 +36,8 @@ gameInit = do
 gameLoop :: Effect Unit
 gameLoop = do
   mem <- getRawMemory
+  spawns <- gameSpawns
+  log (show spawns)
   m <- case parseJson mem of 
         Left _ -> throw "Failed to parse memory"
         Right json -> case (decodeJson json :: Either JsonDecodeError Memory) of

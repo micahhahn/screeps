@@ -1,0 +1,1 @@
+exports.attack_ = (source, target) => source.attack(target)
